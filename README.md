@@ -42,7 +42,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Python 后端默认监听 `http://localhost:5000`，读取 Go 后端 `workdir/exp/results/` 中的 CSV 结果，用 matplotlib 生成折线图和柱状图。
+Python 后端默认监听 `http://localhost:5001`（macOS 上 5000 常被 AirPlay 占用），读取 Go 后端 `workdir/exp/results/` 中的 CSV 结果，用 matplotlib 生成折线图和柱状图。
 
 **图表 API：**
 - `GET /api/charts/tps?type=line|bar` — TPS 图表 (PNG)

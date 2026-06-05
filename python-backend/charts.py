@@ -48,6 +48,8 @@ def find_results_dir(workdir: str) -> str:
 
 def find_brief_csv(results_dir: str) -> str | None:
     """Return path to the first brief CSV found in results_dir."""
+    if not os.path.isdir(results_dir):
+        return None
     preferred = [
         "relay_stats_brief_info.csv",
         "broker_stats_brief_info.csv",
@@ -57,7 +59,11 @@ def find_brief_csv(results_dir: str) -> str | None:
         if os.path.isfile(path):
             return path
     # fallback: any csv with 'brief' in the name
-    for name in sorted(os.listdir(results_dir)):
+    try:
+        entries = sorted(os.listdir(results_dir))
+    except FileNotFoundError:
+        return None
+    for name in entries:
         if name.lower().endswith(".csv") and "brief" in name.lower():
             return os.path.join(results_dir, name)
     return None

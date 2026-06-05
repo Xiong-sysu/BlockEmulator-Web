@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
-from flask import send_from_directory
 
 from charts import (
     METRICS,
@@ -26,6 +25,14 @@ from charts import (
 )
 
 app = Flask(__name__)
+
+# —— CORS after_request ——
+@app.after_request
+def add_cors_headers(response: Response) -> Response:
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    return response
 
 # — config —
 WORKDIR = os.environ.get(
@@ -42,6 +49,23 @@ def _get_rows():
         return []
     _, rows = read_csv_rows(csv_path)
     return rows
+
+
+# ————————————————————————————————————————
+#  Health / info
+# ————————————————————————————————————————
+
+@app.route("/api/health")
+def health():
+    """Lightweight health check — returns whether CSV data is available."""
+    csv_path = find_brief_csv(RESULTS_DIR)
+    rows = _get_rows()
+    return jsonify({
+        "ok": True,
+        "data_available": len(rows) > 0,
+        "csv_path": csv_path or None,
+        "row_count": len(rows),
+    })
 
 
 # ————————————————————————————————————————
@@ -169,6 +193,6 @@ def index():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5001))
     print(f"Chart server → http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=True)

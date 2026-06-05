@@ -14,7 +14,7 @@ import {
 import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
-const CHART_API_BASE = import.meta.env.VITE_CHART_API_BASE ?? 'http://localhost:5000';
+const CHART_API_BASE = import.meta.env.VITE_CHART_API_BASE ?? 'http://localhost:5001';
 
 const defaultConfig = {
   system: {
@@ -362,19 +362,41 @@ function StatusCard({ label, value, tone, wide }) {
 
 function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
   const [chartType, setChartType] = useState('line');
-  const [imgError, setImgError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const currentSrc = chartType === 'line'
     ? src
     : (fallbackSrc || src.replace('type=line', 'type=bar'));
 
   const handleError = useCallback(() => {
-    if (!imgError && chartType === 'line') {
-      // try bar chart on error
+    if (retryCount === 0) {
+      // first error: try switching to bar chart before giving up
       setChartType('bar');
-      setImgError(true);
+      setRetryCount(1);
     }
-  }, [imgError, chartType]);
+    // after bar also fails, stay at broken-image state (user can toggle manually)
+  }, [retryCount]);
+
+  const switchTo = (type) => {
+    setChartType(type);
+    setRetryCount(0);
+  };
+
+  if (!hasData) {
+    return (
+      <article className="metric chart-card">
+        <div className="metric-head">
+          <div className="metric-head-left">
+            <span>{icon}{title}</span>
+            <small>{subtitle}</small>
+          </div>
+        </div>
+        <div className="chart-img-wrap">
+          <div className="empty-chart">等待实验数据...</div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className="metric chart-card">
@@ -386,14 +408,14 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
         <div className="chart-toggle">
           <button
             className={`toggle-btn ${chartType === 'line' ? 'active' : ''}`}
-            onClick={() => { setChartType('line'); setImgError(false); }}
+            onClick={() => switchTo('line')}
             title="折线图"
           >
             📈
           </button>
           <button
             className={`toggle-btn ${chartType === 'bar' ? 'active' : ''}`}
-            onClick={() => { setChartType('bar'); setImgError(false); }}
+            onClick={() => switchTo('bar')}
             title="柱状图"
           >
             📊
@@ -401,15 +423,12 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
         </div>
       </div>
       <div className="chart-img-wrap">
-        {hasData ? (
-          <img
-            src={currentSrc}
-            alt={`${title} ${chartType} chart`}
-            onError={handleError}
-          />
-        ) : (
-          <div className="empty-chart">等待实验数据...</div>
-        )}
+        <img
+          key={`${chartType}-${retryCount}`}
+          src={currentSrc}
+          alt={`${title} — ${chartType} chart`}
+          onError={handleError}
+        />
       </div>
     </article>
   );
@@ -437,11 +456,6 @@ function ResultsTable({ columns, rows }) {
       </table>
     </div>
   );
-}
-
-function formatNumber(value) {
-  if (Math.abs(value) >= 1000000) return value.toExponential(2);
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
 }
 
 createRoot(document.getElementById('root')).render(<App />);
