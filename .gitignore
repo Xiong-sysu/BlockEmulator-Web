@@ -1,0 +1,7 @@
+backend/workdir/*
+!backend/workdir/.gitkeep
+backend/.gocache/
+frontend/node_modules/
+frontend/dist/
+.idea/
+*.log
