@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -14,6 +14,7 @@ import {
 import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
+const CHART_API_BASE = import.meta.env.VITE_CHART_API_BASE ?? 'http://localhost:5000';
 
 const defaultConfig = {
   system: {
@@ -53,10 +54,14 @@ function App() {
   const [logs, setLogs] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     refreshAll();
-    const timer = setInterval(refreshRuntime, 3000);
+    const timer = setInterval(() => {
+      refreshRuntime();
+      setTick((t) => t + 1);
+    }, 3000);
     return () => clearInterval(timer);
   }, []);
 
@@ -262,9 +267,30 @@ function App() {
         {notice && <div className="notice">{notice}</div>}
 
         <section className="charts">
-          <MetricChart title="TPS" icon={<BarChart3 size={18} />} rows={results.rows || []} column="Avg. TPS of this epoch (txs per second)" />
-          <MetricChart title="CTX Ratio" icon={<BarChart3 size={18} />} rows={results.rows || []} column="CTX ratio of this epoch" />
-          <MetricChart title="TCL" icon={<BarChart3 size={18} />} rows={results.rows || []} column="Avg. TCL of this epoch (nanosecond)" />
+          <ChartCard
+            title="TPS"
+            subtitle="Transactions Per Second"
+            icon={<BarChart3 size={18} />}
+            src={`${CHART_API_BASE}/api/charts/tps?type=line&v=${tick}`}
+            fallbackSrc={`${CHART_API_BASE}/api/charts/tps?type=bar&v=${tick}`}
+            hasData={(results.rows || []).length > 0}
+          />
+          <ChartCard
+            title="CTX Ratio"
+            subtitle="Cross-Shard Transaction Ratio"
+            icon={<BarChart3 size={18} />}
+            src={`${CHART_API_BASE}/api/charts/ctx_ratio?type=line&v=${tick}`}
+            fallbackSrc={`${CHART_API_BASE}/api/charts/ctx_ratio?type=bar&v=${tick}`}
+            hasData={(results.rows || []).length > 0}
+          />
+          <ChartCard
+            title="TCL"
+            subtitle="Transaction Confirmation Latency"
+            icon={<BarChart3 size={18} />}
+            src={`${CHART_API_BASE}/api/charts/tcl?type=line&v=${tick}`}
+            fallbackSrc={`${CHART_API_BASE}/api/charts/tcl?type=bar&v=${tick}`}
+            hasData={(results.rows || []).length > 0}
+          />
         </section>
 
         <section className="data-section">
@@ -334,30 +360,57 @@ function StatusCard({ label, value, tone, wide }) {
   );
 }
 
-function MetricChart({ title, icon, rows, column }) {
-  const values = rows.map((row) => Number(row[column])).filter((value) => Number.isFinite(value));
-  const max = Math.max(...values, 1);
-  const points = values.map((value, idx) => {
-    const x = values.length === 1 ? 96 : 12 + (idx * 168) / (values.length - 1);
-    const y = 88 - (value / max) * 72;
-    return `${x},${y}`;
-  }).join(' ');
+function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
+  const [chartType, setChartType] = useState('line');
+  const [imgError, setImgError] = useState(false);
+
+  const currentSrc = chartType === 'line'
+    ? src
+    : (fallbackSrc || src.replace('type=line', 'type=bar'));
+
+  const handleError = useCallback(() => {
+    if (!imgError && chartType === 'line') {
+      // try bar chart on error
+      setChartType('bar');
+      setImgError(true);
+    }
+  }, [imgError, chartType]);
 
   return (
-    <article className="metric">
+    <article className="metric chart-card">
       <div className="metric-head">
-        <span>{icon}{title}</span>
-        <strong>{values.length ? formatNumber(values.at(-1)) : '-'}</strong>
+        <div className="metric-head-left">
+          <span>{icon}{title}</span>
+          <small>{subtitle}</small>
+        </div>
+        <div className="chart-toggle">
+          <button
+            className={`toggle-btn ${chartType === 'line' ? 'active' : ''}`}
+            onClick={() => { setChartType('line'); setImgError(false); }}
+            title="折线图"
+          >
+            📈
+          </button>
+          <button
+            className={`toggle-btn ${chartType === 'bar' ? 'active' : ''}`}
+            onClick={() => { setChartType('bar'); setImgError(false); }}
+            title="柱状图"
+          >
+            📊
+          </button>
+        </div>
       </div>
-      <svg viewBox="0 0 192 104" role="img" aria-label={title}>
-        <line x1="10" y1="88" x2="182" y2="88" />
-        <line x1="10" y1="16" x2="10" y2="88" />
-        {points && <polyline points={points} />}
-        {values.map((value, idx) => {
-          const [x, y] = points.split(' ')[idx].split(',');
-          return <circle key={`${idx}-${value}`} cx={x} cy={y} r="2.8" />;
-        })}
-      </svg>
+      <div className="chart-img-wrap">
+        {hasData ? (
+          <img
+            src={currentSrc}
+            alt={`${title} ${chartType} chart`}
+            onError={handleError}
+          />
+        ) : (
+          <div className="empty-chart">等待实验数据...</div>
+        )}
+      </div>
     </article>
   );
 }

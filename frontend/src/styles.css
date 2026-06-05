@@ -265,6 +265,73 @@ h3 {
   font-size: 20px;
 }
 
+/* ————— ChartCard component ————— */
+
+.chart-card .metric-head-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chart-card .metric-head-left small {
+  color: #8695a5;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chart-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.toggle-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #d6dee6;
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.toggle-btn:hover {
+  border-color: #0f766e;
+}
+
+.toggle-btn.active {
+  border-color: #0f766e;
+  background: #e6f3f1;
+}
+
+.chart-img-wrap {
+  margin-top: 10px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafb;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-img-wrap img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.empty-chart {
+  color: #8695a5;
+  font-size: 13px;
+  padding: 40px 0;
+  text-align: center;
+}
+
 .metric svg {
   display: block;
   width: 100%;
