@@ -5,6 +5,7 @@ import {
   BarChart3,
   Download,
   FileText,
+  HelpCircle,
   Play,
   RefreshCw,
   Save,
@@ -192,11 +193,29 @@ function App() {
 
         <section className="form-section">
           <SectionTitle title="System" />
-          <NumberField label="分片数" value={config.system.shard_num} onChange={(v) => update('system.shard_num', v)} />
-          <NumberField label="每片节点数" value={config.system.node_num} onChange={(v) => update('system.node_num', v)} />
-          <NumberField label="区块交易上限" value={config.system.limit} onChange={(v) => update('system.limit', v)} />
+          <NumberField
+            label="分片数"
+            value={config.system.shard_num}
+            onChange={(v) => update('system.shard_num', v)}
+            help="The number of shards in the blockchain system. Each shard operates as an independent sub-blockchain with its own set of nodes. Must be a positive integer."
+          />
+          <NumberField
+            label="每片节点数"
+            value={config.system.node_num}
+            onChange={(v) => update('system.node_num', v)}
+            help="The number of consensus nodes per shard. More nodes improve decentralization and fault tolerance but may reduce overall throughput. Must be a positive integer."
+          />
+          <NumberField
+            label="区块交易上限"
+            value={config.system.limit}
+            onChange={(v) => update('system.limit', v)}
+            help="Maximum number of transactions per block. This limits the block size to control propagation time and resource usage across the network."
+          />
           <label className="field">
-            <span>共识类型</span>
+            <span>
+              共识类型
+              <HelpIcon text="Cross-shard transaction handling mode:\n\n• Static Relay — Accounts remain in their original shards; cross-shard txs handled by relay nodes.\n• Static Broker — Accounts remain in their original shards; cross-shard txs handled by dedicated broker accounts.\n• CLPA Relay — Accounts are dynamically migrated across shards by CLPA at each epoch; cross-shard txs handled by relay nodes.\n• CLPA Broker — Accounts are dynamically migrated by CLPA; cross-shard txs handled by broker accounts." />
+            </span>
             <select value={config.system.consensus_type} onChange={(e) => update('system.consensus_type', e.target.value)}>
               {consensusOptions.map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
@@ -207,23 +226,49 @@ function App() {
 
         <section className="form-section">
           <SectionTitle title="Consensus Node" />
-          <NumberField label="区块间隔 ms" value={config.consensus_node.block_interval} onChange={(v) => update('consensus_node.block_interval', v)} />
+          <NumberField
+            label="区块间隔 ms"
+            value={config.consensus_node.block_interval}
+            onChange={(v) => update('consensus_node.block_interval', v)}
+            help="Time interval between two consecutive blocks, in milliseconds. Lower values increase transaction throughput but may lead to more forks and higher computational overhead."
+          />
         </section>
 
         <section className="form-section">
           <SectionTitle title="Supervisor" />
-          <NumberField label="交易总数" value={config.supervisor.tx_number} onChange={(v) => update('supervisor.tx_number', v)} />
-          <NumberField label="注入速度 tx/s" value={config.supervisor.tx_injection_speed} onChange={(v) => update('supervisor.tx_injection_speed', v)} />
-          <NumberField label="Epoch 秒" value={config.supervisor.epoch_duration} onChange={(v) => update('supervisor.epoch_duration', v)} />
+          <NumberField
+            label="交易总数"
+            value={config.supervisor.tx_number}
+            onChange={(v) => update('supervisor.tx_number', v)}
+            help="Total number of transactions the supervisor will inject into the system during the experiment run."
+          />
+          <NumberField
+            label="注入速度 tx/s"
+            value={config.supervisor.tx_injection_speed}
+            onChange={(v) => update('supervisor.tx_injection_speed', v)}
+            help="Transaction injection rate in transactions per second (tx/s). The supervisor injects transactions at this constant rate into the blockchain network."
+          />
+          <NumberField
+            label="Epoch 秒"
+            value={config.supervisor.epoch_duration}
+            onChange={(v) => update('supervisor.epoch_duration', v)}
+            help="Duration of one epoch in seconds. At the end of each epoch, performance metrics are recorded and CLPA may migrate accounts between shards to rebalance load."
+          />
           <label className="field">
-            <span>交易来源</span>
+            <span>
+              交易来源
+              <HelpIcon text="Source of injected transactions:\n\n• Random Source — Supervisor generates random transactions automatically.\n• CSV Source — Supervisor reads transactions from a specified CSV file." />
+            </span>
             <select value={config.supervisor.tx_source_type} onChange={(e) => update('supervisor.tx_source_type', e.target.value)}>
               <option value="random_source">Random Source</option>
               <option value="csv_source">CSV Source</option>
             </select>
           </label>
           <label className="field">
-            <span>CSV 路径</span>
+            <span>
+              CSV 路径
+              <HelpIcon text="File path to the CSV file containing pre-generated transactions. This field is only used when the transaction source type is set to 'CSV Source'." />
+            </span>
             <input value={config.supervisor.tx_source_file} onChange={(e) => update('supervisor.tx_source_file', e.target.value)} placeholder="./data/txs.csv" />
           </label>
           <label className="check-field">
@@ -233,13 +278,24 @@ function App() {
               onChange={(e) => update('supervisor.exclude_contract_txs', e.target.checked)}
             />
             <span>Exclude contract transactions</span>
+            <HelpIcon side="left" text="When enabled, smart contract-related transactions are filtered out when reading from a CSV source. Useful for benchmarking pure transfer workloads without smart contract overhead." />
           </label>
         </section>
 
         <section className="form-section">
           <SectionTitle title="Network" />
-          <NumberField label="带宽" value={config.network.bandwidth} onChange={(v) => update('network.bandwidth', v)} />
-          <NumberField label="延迟 ms" value={config.network.latency} onChange={(v) => update('network.latency', v)} />
+          <NumberField
+            label="带宽"
+            value={config.network.bandwidth}
+            onChange={(v) => update('network.bandwidth', v)}
+            help="Network bandwidth limit for inter-node communication. Controls the maximum data transfer rate between consensus nodes in the blockchain network."
+          />
+          <NumberField
+            label="延迟 ms"
+            value={config.network.latency}
+            onChange={(v) => update('network.latency', v)}
+            help="Artificial network latency added to all inter-node messages, in milliseconds. Use this to simulate real-world network conditions such as WAN delays."
+          />
         </section>
       </aside>
 
@@ -333,10 +389,22 @@ function SectionTitle({ title }) {
   );
 }
 
-function NumberField({ label, value, onChange }) {
+function HelpIcon({ text, side }) {
+  return (
+    <span className="help-icon-wrap">
+      <HelpCircle size={14} className="help-icon" />
+      <span className={`tooltip${side === 'left' ? ' tooltip-left' : ''}`}>{text}</span>
+    </span>
+  );
+}
+
+function NumberField({ label, value, onChange, help }) {
   return (
     <label className="field">
-      <span>{label}</span>
+      <span>
+        {label}
+        {help ? <HelpIcon text={help} /> : null}
+      </span>
       <input type="number" value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
