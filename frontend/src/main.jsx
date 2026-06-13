@@ -227,7 +227,7 @@ function App() {
         <section className="form-section">
           <SectionTitle title="Consensus Node" />
           <NumberField
-            label="区块间隔 ms"
+            label="区块间隔 (ms)"
             value={config.consensus_node.block_interval}
             onChange={(v) => update('consensus_node.block_interval', v)}
             help="Time interval between two consecutive blocks, in milliseconds. Lower values increase transaction throughput but may lead to more forks and higher computational overhead."
@@ -243,13 +243,13 @@ function App() {
             help="Total number of transactions the supervisor will inject into the system during the experiment run."
           />
           <NumberField
-            label="注入速度 tx/s"
+            label="注入速度 (tx/s)"
             value={config.supervisor.tx_injection_speed}
             onChange={(v) => update('supervisor.tx_injection_speed', v)}
             help="Transaction injection rate in transactions per second (tx/s). The supervisor injects transactions at this constant rate into the blockchain network."
           />
           <NumberField
-            label="Epoch 秒"
+            label="Epoch (s)"
             value={config.supervisor.epoch_duration}
             onChange={(v) => update('supervisor.epoch_duration', v)}
             help="Duration of one epoch in seconds. At the end of each epoch, performance metrics are recorded and CLPA may migrate accounts between shards to rebalance load."
