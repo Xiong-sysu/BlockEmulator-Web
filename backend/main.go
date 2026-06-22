@@ -93,6 +93,63 @@ func main() {
 		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: table})
 	}))
 
+	mux.HandleFunc("/api/config/saved", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			configs, err := service.ListSavedConfigs()
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			if configs == nil {
+				configs = []emulator.SavedConfigMeta{}
+			}
+			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: configs})
+		case http.MethodPost:
+			var body struct {
+				Description string            `json:"description"`
+				Config      emulator.WebConfig `json:"config"`
+			}
+			if err := decodeJSON(r, &body); err != nil {
+				writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Error: err.Error()})
+				return
+			}
+			meta, err := service.SaveConfigNamed(body.Description, body.Config)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: meta})
+		default:
+			methodNotAllowed(w)
+		}
+	}))
+
+	mux.HandleFunc("/api/config/saved/{id}", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if id == "" {
+			writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Error: "missing id"})
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			cfg, err := service.LoadSavedConfig(id)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: cfg})
+		case http.MethodDelete:
+			if err := service.DeleteSavedConfig(id); err != nil {
+				writeError(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]string{"message": "deleted"}})
+		default:
+			methodNotAllowed(w)
+		}
+	}))
+
 	mux.HandleFunc("/api/experiments/start", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w)
@@ -218,7 +275,7 @@ func withCORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

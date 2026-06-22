@@ -472,6 +472,157 @@ td {
   display: block;
 }
 
+/* ————— Modal ————— */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(24, 32, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal {
+  background: #ffffff;
+  border: 1px solid #d9e0e7;
+  border-radius: 12px;
+  width: 480px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 0;
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  color: #18202a;
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #667684;
+  cursor: pointer;
+  padding: 0;
+}
+
+.modal-close:hover {
+  background: #f3f6f8;
+  color: #18202a;
+}
+
+.modal-body {
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+}
+
+.modal-body .field {
+  margin-bottom: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+/* ————— Saved Config List ————— */
+
+.saved-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+
+.saved-config-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.saved-config-item:hover {
+  border-color: #0f766e;
+  background: #f7faf9;
+}
+
+.saved-config-item.selected {
+  border-color: #0f766e;
+  background: #e6f3f1;
+}
+
+.saved-config-item-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.saved-config-item-icon {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.saved-config-item.selected .saved-config-item-icon {
+  color: #0f766e;
+}
+
+.saved-config-item-desc {
+  font-size: 14px;
+  font-weight: 600;
+  color: #18202a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-config-item-date {
+  font-size: 12px;
+  color: #8695a5;
+  margin-top: 2px;
+}
+
+.saved-config-item .icon-button.danger {
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 0 8px;
+}
+
+.saved-config-item .icon-button.danger span {
+  display: none;
+}
+
+.modal-body .empty {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;

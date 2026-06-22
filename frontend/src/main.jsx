@@ -4,13 +4,17 @@ import {
   Activity,
   BarChart3,
   Download,
+  File,
   FileText,
+  FolderOpen,
   HelpCircle,
   Play,
   RefreshCw,
   Save,
   Square,
   Terminal,
+  Trash2,
+  X,
 } from 'lucide-react';
 import './styles.css';
 
@@ -56,6 +60,11 @@ function App() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const [savedConfigs, setSavedConfigs] = useState([]);
+  const [selectedSavedId, setSelectedSavedId] = useState(null);
+  const [saveDescription, setSaveDescription] = useState('');
 
   useEffect(() => {
     refreshAll();
@@ -168,6 +177,62 @@ function App() {
     }
   }
 
+  async function listSavedConfigs() {
+    try {
+      const list = await api('/api/config/saved');
+      setSavedConfigs(list || []);
+    } catch (err) {
+      setNotice(err.message);
+    }
+  }
+
+  async function saveConfigNamed() {
+    setBusy(true);
+    try {
+      await validateConfig();
+      await api('/api/config/saved', {
+        method: 'POST',
+        body: JSON.stringify({ description: saveDescription, config }),
+      });
+      setNotice('Configuration saved' + (saveDescription ? ': ' + saveDescription : ''));
+      setShowSaveDialog(false);
+      setSaveDescription('');
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadSavedConfig(id) {
+    setBusy(true);
+    try {
+      const loadedCfg = await api(`/api/config/saved/${encodeURIComponent(id)}`);
+      setConfig(loadedCfg);
+      setNotice('Configuration loaded');
+      setShowLoadDialog(false);
+      setSelectedSavedId(null);
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSavedConfig(id) {
+    setBusy(true);
+    try {
+      await api(`/api/config/saved/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      setNotice('Configuration deleted');
+      await listSavedConfigs();
+      if (selectedSavedId === id) setSelectedSavedId(null);
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function update(path, rawValue) {
     const value = typeof rawValue === 'string' && /^-?\d+$/.test(rawValue) ? Number(rawValue) : rawValue;
     setConfig((prev) => {
@@ -214,7 +279,7 @@ function App() {
           <label className="field">
             <span>
               共识类型
-              <HelpIcon text="Cross-shard transaction handling mode:\n\n• Static Relay — Accounts remain in their original shards; cross-shard txs handled by relay nodes.\n• Static Broker — Accounts remain in their original shards; cross-shard txs handled by dedicated broker accounts.\n• CLPA Relay — Accounts are dynamically migrated across shards by CLPA at each epoch; cross-shard txs handled by relay nodes.\n• CLPA Broker — Accounts are dynamically migrated by CLPA; cross-shard txs handled by broker accounts." />
+              <HelpIcon text={"Cross-shard transaction handling mode:\n\n• Static Relay — Accounts remain in their original shards; cross-shard txs handled by relay nodes.\n• Static Broker — Accounts remain in their original shards; cross-shard txs handled by dedicated broker accounts.\n• CLPA Relay — Accounts are dynamically migrated across shards by CLPA at each epoch; cross-shard txs handled by relay nodes.\n• CLPA Broker — Accounts are dynamically migrated by CLPA; cross-shard txs handled by broker accounts."} />
             </span>
             <select value={config.system.consensus_type} onChange={(e) => update('system.consensus_type', e.target.value)}>
               {consensusOptions.map(([value, label]) => (
@@ -307,7 +372,8 @@ function App() {
           </div>
           <div className="actions">
             <IconButton icon={<RefreshCw size={17} />} label="刷新" onClick={refreshAll} disabled={busy} />
-            <IconButton icon={<Save size={17} />} label="保存配置" onClick={saveConfig} disabled={busy} />
+            <IconButton icon={<Save size={17} />} label="保存配置" onClick={() => setShowSaveDialog(true)} disabled={busy} />
+            <IconButton icon={<FolderOpen size={17} />} label="加载配置" onClick={() => { listSavedConfigs(); setShowLoadDialog(true); }} disabled={busy} />
             <IconButton icon={<Play size={17} />} label="启动" onClick={startExperiment} disabled={busy || status.status === 'running'} primary />
             <IconButton icon={<Square size={17} />} label="停止" onClick={stopExperiment} disabled={busy || status.status !== 'running'} danger />
           </div>
@@ -376,7 +442,132 @@ function App() {
           <pre>{logs || 'No logs yet.'}</pre>
         </section>
       </section>
+
+      <SaveDialog
+        open={showSaveDialog}
+        onClose={() => { setShowSaveDialog(false); setSaveDescription(''); }}
+        description={saveDescription}
+        onDescriptionChange={setSaveDescription}
+        onSave={saveConfigNamed}
+        busy={busy}
+      />
+      <LoadDialog
+        open={showLoadDialog}
+        onClose={() => { setShowLoadDialog(false); setSelectedSavedId(null); }}
+        configs={savedConfigs}
+        selectedId={selectedSavedId}
+        onSelect={setSelectedSavedId}
+        onLoad={() => { if (selectedSavedId) { loadSavedConfig(selectedSavedId).catch(() => {}); } }}
+        onDelete={deleteSavedConfig}
+        busy={busy}
+      />
     </main>
+  );
+}
+
+function Modal({ open, onClose, title, children }) {
+  if (!open) return null;
+
+  function handleOverlayClick(e) {
+    if (e.target === e.currentTarget) onClose();
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Escape') onClose();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={handleOverlayClick} onKeyDown={handleKeyDown}>
+      <div className="modal" role="dialog" aria-modal="true">
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button className="modal-close" onClick={onClose} title="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function SaveDialog({ open, onClose, description, onDescriptionChange, onSave, busy }) {
+  function handleSubmit(e) {
+    e.preventDefault();
+    onSave();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Save Configuration">
+      <form onSubmit={handleSubmit}>
+        <label className="field">
+          <span>Description</span>
+          <input
+            type="text"
+            value={description}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            placeholder="e.g. Baseline 4x4 relay test"
+            autoFocus
+          />
+        </label>
+        <div className="modal-actions">
+          <button type="button" className="icon-button" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="icon-button primary" disabled={busy}>
+            <Save size={16} /> <span>Save</span>
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function LoadDialog({ open, onClose, configs, selectedId, onSelect, onLoad, onDelete, busy }) {
+  return (
+    <Modal open={open} onClose={onClose} title="Load Configuration">
+      {(!configs || configs.length === 0) ? (
+        <div className="empty">No saved configurations found. Save a configuration first.</div>
+      ) : (
+        <>
+          <div className="saved-config-list">
+            {configs.map((c) => (
+              <div
+                key={c.id}
+                className={`saved-config-item ${selectedId === c.id ? 'selected' : ''}`}
+                onClick={() => onSelect(c.id)}
+                onDoubleClick={() => { try { onLoad(); } catch (_) {} }}
+              >
+                <div className="saved-config-item-main">
+                  <File size={16} className="saved-config-item-icon" />
+                  <div>
+                    <div className="saved-config-item-desc">{c.description || 'Untitled'}</div>
+                    <div className="saved-config-item-date">{c.saved_at ? new Date(c.saved_at).toLocaleString() : ''}</div>
+                  </div>
+                </div>
+                <button
+                  className="icon-button danger"
+                  onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}
+                  disabled={busy}
+                  title="Delete"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="icon-button" onClick={onClose} disabled={busy}>Cancel</button>
+            <button
+              type="button"
+              className="icon-button primary"
+              onClick={onLoad}
+              disabled={busy || !selectedId}
+            >
+              <FolderOpen size={16} /> <span>Load</span>
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 

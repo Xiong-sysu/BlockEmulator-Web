@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -184,6 +187,125 @@ func (s *Service) SaveIPTable(shards, nodes int64) (map[string]map[string]string
 		return nil, err
 	}
 	return table, os.WriteFile(s.ipTablePath(), data, 0644)
+}
+
+var safeFilenameRe = regexp.MustCompile(`[^a-zA-Z0-9_\-\.]+`)
+
+func sanitizeFilename(desc string) string {
+	cleaned := safeFilenameRe.ReplaceAllString(desc, "_")
+	cleaned = strings.Trim(cleaned, "_-.")
+	if len(cleaned) > 60 {
+		cleaned = cleaned[:60]
+	}
+	cleaned = strings.Trim(cleaned, "_-.")
+	if cleaned == "" {
+		cleaned = "config"
+	}
+	return cleaned
+}
+
+func (s *Service) savedConfigsDir() string {
+	return filepath.Join(s.workdir, "saved_configs")
+}
+
+func (s *Service) ListSavedConfigs() ([]SavedConfigMeta, error) {
+	dir := s.savedConfigsDir()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var result []SavedConfigMeta
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var sf savedConfigFile
+		if err := json.Unmarshal(data, &sf); err != nil {
+			continue
+		}
+		result = append(result, SavedConfigMeta{
+			ID:          entry.Name(),
+			Description: sf.Description,
+			SavedAt:     sf.SavedAt,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].SavedAt > result[j].SavedAt
+	})
+	return result, nil
+}
+
+func (s *Service) SaveConfigNamed(description string, cfg WebConfig) (SavedConfigMeta, error) {
+	if err := ValidateConfig(cfg); err != nil {
+		return SavedConfigMeta{}, err
+	}
+	safe := sanitizeFilename(description)
+	filename := fmt.Sprintf("%s_%d.json", safe, time.Now().Unix())
+	dir := s.savedConfigsDir()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return SavedConfigMeta{}, err
+	}
+	sf := savedConfigFile{
+		Description: description,
+		SavedAt:     time.Now().UTC().Format(time.RFC3339),
+		Config:      cfg,
+	}
+	data, err := json.MarshalIndent(sf, "", "  ")
+	if err != nil {
+		return SavedConfigMeta{}, err
+	}
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return SavedConfigMeta{}, err
+	}
+	return SavedConfigMeta{
+		ID:          filename,
+		Description: description,
+		SavedAt:     sf.SavedAt,
+	}, nil
+}
+
+func (s *Service) LoadSavedConfig(id string) (WebConfig, error) {
+	base := filepath.Base(id)
+	if base != id || base == "." || base == ".." {
+		return WebConfig{}, fmt.Errorf("%w: invalid id", ErrNotFound)
+	}
+	path := filepath.Join(s.savedConfigsDir(), base)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return WebConfig{}, fmt.Errorf("%w: saved config not found", ErrNotFound)
+		}
+		return WebConfig{}, err
+	}
+	var sf savedConfigFile
+	if err := json.Unmarshal(data, &sf); err != nil {
+		return WebConfig{}, err
+	}
+	return sf.Config, nil
+}
+
+func (s *Service) DeleteSavedConfig(id string) error {
+	base := filepath.Base(id)
+	if base != id || base == "." || base == ".." {
+		return fmt.Errorf("%w: invalid id", ErrNotFound)
+	}
+	path := filepath.Join(s.savedConfigsDir(), base)
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: saved config not found", ErrNotFound)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Service) applyRuntimePaths(cfg map[string]interface{}) {
