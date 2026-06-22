@@ -96,7 +96,7 @@ function App() {
       const cfg = await api('/api/config');
       setConfig(cfg);
       await refreshRuntime();
-      setNotice('配置已从 BlockEmulator-X 读取');
+      setNotice('Configuration loaded from BlockEmulator-X');
     } catch (err) {
       setNotice(err.message);
     } finally {
@@ -121,16 +121,16 @@ function App() {
 
   async function validateConfig() {
     const errors = [];
-    if (config.system.shard_num <= 0) errors.push('分片数必须大于 0');
-    if (config.system.node_num <= 0) errors.push('每片节点数必须大于 0');
-    if (config.system.limit <= 0) errors.push('区块大小必须大于 0');
-    if (config.consensus_node.block_interval <= 0) errors.push('区块间隔必须大于 0');
-    if (config.supervisor.tx_number <= 0) errors.push('交易总数必须大于 0');
-    if (config.supervisor.tx_injection_speed <= 0) errors.push('注入速度必须大于 0');
+    if (config.system.shard_num <= 0) errors.push('Shard count must be greater than 0');
+    if (config.system.node_num <= 0) errors.push('Nodes per shard must be greater than 0');
+    if (config.system.limit <= 0) errors.push('Block size must be greater than 0');
+    if (config.consensus_node.block_interval <= 0) errors.push('Block interval must be greater than 0');
+    if (config.supervisor.tx_number <= 0) errors.push('Transaction count must be greater than 0');
+    if (config.supervisor.tx_injection_speed <= 0) errors.push('Injection speed must be greater than 0');
     if (config.supervisor.tx_source_type === 'csv_source' && !config.supervisor.tx_source_file.trim()) {
-      errors.push('CSV 交易源需要填写文件路径');
+      errors.push('CSV file path is required for CSV source');
     }
-    if (errors.length > 0) throw new Error(errors.join('；'));
+    if (errors.length > 0) throw new Error(errors.join('; '));
     await api('/api/config/validate', { method: 'POST', body: JSON.stringify(config) });
   }
 
@@ -140,7 +140,7 @@ function App() {
       await validateConfig();
       await api('/api/config', { method: 'POST', body: JSON.stringify(config) });
       await api('/api/ip-table', { method: 'POST', body: JSON.stringify(config) });
-      setNotice('配置和 ip_table.json 已写入 BlockEmulator-X');
+      setNotice('Configuration and ip_table.json written to BlockEmulator-X');
     } catch (err) {
       setNotice(err.message);
     } finally {
@@ -154,7 +154,7 @@ function App() {
       await validateConfig();
       const nextStatus = await api('/api/experiments/start', { method: 'POST', body: JSON.stringify(config) });
       setStatus(nextStatus);
-      setNotice('实验已启动');
+      setNotice('Experiment started');
       await refreshRuntime();
     } catch (err) {
       setNotice(err.message);
@@ -168,7 +168,7 @@ function App() {
     try {
       const nextStatus = await api('/api/experiments/stop', { method: 'POST' });
       setStatus(nextStatus);
-      setNotice('实验已停止');
+      setNotice('Experiment stopped');
       await refreshRuntime();
     } catch (err) {
       setNotice(err.message);
@@ -259,26 +259,26 @@ function App() {
         <section className="form-section">
           <SectionTitle title="System" />
           <NumberField
-            label="分片数"
+            label="Shard Count"
             value={config.system.shard_num}
             onChange={(v) => update('system.shard_num', v)}
             help="The number of shards in the blockchain system. Each shard operates as an independent sub-blockchain with its own set of nodes. Must be a positive integer."
           />
           <NumberField
-            label="每片节点数"
+            label="Nodes per Shard"
             value={config.system.node_num}
             onChange={(v) => update('system.node_num', v)}
             help="The number of consensus nodes per shard. More nodes improve decentralization and fault tolerance but may reduce overall throughput. Must be a positive integer."
           />
           <NumberField
-            label="区块交易上限"
+            label="Block Tx Limit"
             value={config.system.limit}
             onChange={(v) => update('system.limit', v)}
             help="Maximum number of transactions per block. This limits the block size to control propagation time and resource usage across the network."
           />
           <label className="field">
             <span>
-              共识类型
+              Consensus Type
               <HelpIcon text={"Cross-shard transaction handling mode:\n\n• Static Relay — Accounts remain in their original shards; cross-shard txs handled by relay nodes.\n• Static Broker — Accounts remain in their original shards; cross-shard txs handled by dedicated broker accounts.\n• CLPA Relay — Accounts are dynamically migrated across shards by CLPA at each epoch; cross-shard txs handled by relay nodes.\n• CLPA Broker — Accounts are dynamically migrated by CLPA; cross-shard txs handled by broker accounts."} />
             </span>
             <select value={config.system.consensus_type} onChange={(e) => update('system.consensus_type', e.target.value)}>
@@ -292,7 +292,7 @@ function App() {
         <section className="form-section">
           <SectionTitle title="Consensus Node" />
           <NumberField
-            label="区块间隔 (ms)"
+            label="Block Interval (ms)"
             value={config.consensus_node.block_interval}
             onChange={(v) => update('consensus_node.block_interval', v)}
             help="Time interval between two consecutive blocks, in milliseconds. Lower values increase transaction throughput but may lead to more forks and higher computational overhead."
@@ -302,13 +302,13 @@ function App() {
         <section className="form-section">
           <SectionTitle title="Supervisor" />
           <NumberField
-            label="交易总数"
+            label="Total Transactions"
             value={config.supervisor.tx_number}
             onChange={(v) => update('supervisor.tx_number', v)}
             help="Total number of transactions the supervisor will inject into the system during the experiment run."
           />
           <NumberField
-            label="注入速度 (tx/s)"
+            label="Injection Speed (tx/s)"
             value={config.supervisor.tx_injection_speed}
             onChange={(v) => update('supervisor.tx_injection_speed', v)}
             help="Transaction injection rate in transactions per second (tx/s). The supervisor injects transactions at this constant rate into the blockchain network."
@@ -321,7 +321,7 @@ function App() {
           />
           <label className="field">
             <span>
-              交易来源
+              Transaction Source
               <HelpIcon text="Source of injected transactions:\n\n• Random Source — Supervisor generates random transactions automatically.\n• CSV Source — Supervisor reads transactions from a specified CSV file." />
             </span>
             <select value={config.supervisor.tx_source_type} onChange={(e) => update('supervisor.tx_source_type', e.target.value)}>
@@ -331,7 +331,7 @@ function App() {
           </label>
           <label className="field">
             <span>
-              CSV 路径
+              CSV Path
               <HelpIcon text="File path to the CSV file containing pre-generated transactions. This field is only used when the transaction source type is set to 'CSV Source'." />
             </span>
             <input value={config.supervisor.tx_source_file} onChange={(e) => update('supervisor.tx_source_file', e.target.value)} placeholder="./data/txs.csv" />
@@ -350,13 +350,13 @@ function App() {
         <section className="form-section">
           <SectionTitle title="Network" />
           <NumberField
-            label="带宽"
+            label="Bandwidth"
             value={config.network.bandwidth}
             onChange={(v) => update('network.bandwidth', v)}
             help="Network bandwidth limit for inter-node communication. Controls the maximum data transfer rate between consensus nodes in the blockchain network."
           />
           <NumberField
-            label="延迟 ms"
+            label="Latency (ms)"
             value={config.network.latency}
             onChange={(v) => update('network.latency', v)}
             help="Artificial network latency added to all inter-node messages, in milliseconds. Use this to simulate real-world network conditions such as WAN delays."
@@ -371,19 +371,19 @@ function App() {
             <h2>{config.system.shard_num} shards x {config.system.node_num} nodes · {modeLabel}</h2>
           </div>
           <div className="actions">
-            <IconButton icon={<RefreshCw size={17} />} label="刷新" onClick={refreshAll} disabled={busy} />
-            <IconButton icon={<Save size={17} />} label="保存配置" onClick={() => setShowSaveDialog(true)} disabled={busy} />
-            <IconButton icon={<FolderOpen size={17} />} label="加载配置" onClick={() => { listSavedConfigs(); setShowLoadDialog(true); }} disabled={busy} />
-            <IconButton icon={<Play size={17} />} label="启动" onClick={startExperiment} disabled={busy || status.status === 'running'} primary />
-            <IconButton icon={<Square size={17} />} label="停止" onClick={stopExperiment} disabled={busy || status.status !== 'running'} danger />
+            <IconButton icon={<RefreshCw size={17} />} label="Refresh" onClick={refreshAll} disabled={busy} />
+            <IconButton icon={<Save size={17} />} label="Save Config" onClick={() => setShowSaveDialog(true)} disabled={busy} />
+            <IconButton icon={<FolderOpen size={17} />} label="Load Config" onClick={() => { listSavedConfigs(); setShowLoadDialog(true); }} disabled={busy} />
+            <IconButton icon={<Play size={17} />} label="Start" onClick={startExperiment} disabled={busy || status.status === 'running'} primary />
+            <IconButton icon={<Square size={17} />} label="Stop" onClick={stopExperiment} disabled={busy || status.status !== 'running'} danger />
           </div>
         </header>
 
         <div className="status-grid">
-          <StatusCard label="状态" value={status.status || 'idle'} tone={status.status} />
-          <StatusCard label="进程数" value={status.pids?.length || 0} />
-          <StatusCard label="结果文件" value={results.files?.length || 0} />
-          <StatusCard label="消息" value={status.message || notice || 'ready'} wide />
+          <StatusCard label="Status" value={status.status || 'idle'} tone={status.status} />
+          <StatusCard label="Processes" value={status.pids?.length || 0} />
+          <StatusCard label="Result Files" value={results.files?.length || 0} />
+          <StatusCard label="Message" value={status.message || notice || 'ready'} wide />
         </div>
 
         {notice && <div className="notice">{notice}</div>}
@@ -419,7 +419,7 @@ function App() {
           <div className="section-head">
             <div>
               <p className="eyebrow">Results</p>
-              <h3>{results.brief_file || '暂无结果'}</h3>
+              <h3>{results.brief_file || 'No results yet'}</h3>
             </div>
             {results.brief_file && (
               <a className="download" href={`${API_BASE}${results.download_url}`}>
@@ -435,7 +435,7 @@ function App() {
           <div className="section-head">
             <div>
               <p className="eyebrow">Runtime</p>
-              <h3>日志</h3>
+              <h3>Logs</h3>
             </div>
             <Terminal size={18} />
           </div>
@@ -651,7 +651,7 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
           </div>
         </div>
         <div className="chart-img-wrap">
-          <div className="empty-chart">等待实验数据...</div>
+          <div className="empty-chart">Waiting for experiment data...</div>
         </div>
       </article>
     );
@@ -668,14 +668,14 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
           <button
             className={`toggle-btn ${chartType === 'line' ? 'active' : ''}`}
             onClick={() => switchTo('line')}
-            title="折线图"
+            title="Line Chart"
           >
             📈
           </button>
           <button
             className={`toggle-btn ${chartType === 'bar' ? 'active' : ''}`}
             onClick={() => switchTo('bar')}
-            title="柱状图"
+            title="Bar Chart"
           >
             📊
           </button>
@@ -695,7 +695,7 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
 
 function ResultsTable({ columns, rows }) {
   if (!columns.length || !rows.length) {
-    return <div className="empty">实验结束后，这里会展示 brief CSV 的 epoch 指标。</div>;
+    return <div className="empty">After the experiment completes, epoch metrics from the brief CSV will be displayed here.</div>;
   }
   return (
     <div className="table-wrap">
