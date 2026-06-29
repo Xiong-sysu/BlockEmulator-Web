@@ -284,6 +284,19 @@ h3 {
   gap: 4px;
 }
 
+.chart-disclaimer {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: #fef9e7;
+  border: 1px solid #f9e79f;
+  color: #7d6608;
+  font-size: 18px;
+  font-weight: 500;
+  text-align: center;
+}
+
 .toggle-btn {
   width: 32px;
   height: 32px;
@@ -470,6 +483,28 @@ td {
 
 .help-icon-wrap:hover .tooltip {
   display: block;
+}
+
+/* ————— CSV Path file upload ————— */
+
+.csv-path-row {
+  display: flex;
+  gap: 6px;
+}
+
+.csv-path-row input[type="text"],
+.csv-path-row input:not([type]) {
+  flex: 1;
+}
+
+.csv-file-input {
+  display: none;
+}
+
+.csv-path-row .icon-button {
+  flex-shrink: 0;
+  min-height: auto;
+  height: 100%;
 }
 
 /* ————— Modal ————— */

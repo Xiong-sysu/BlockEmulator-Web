@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
-  BarChart3,
   Download,
   File,
   FileText,
@@ -14,6 +13,7 @@ import {
   Square,
   Terminal,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import './styles.css';
@@ -65,6 +65,7 @@ function App() {
   const [savedConfigs, setSavedConfigs] = useState([]);
   const [selectedSavedId, setSelectedSavedId] = useState(null);
   const [saveDescription, setSaveDescription] = useState('');
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     refreshAll();
@@ -233,6 +234,29 @@ function App() {
     }
   }
 
+  async function handleFileUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/api/upload/tx-source`, {
+        method: 'POST',
+        body: formData,
+      });
+      const payload = await res.json();
+      if (!payload.ok) throw new Error(payload.error || 'upload failed');
+      update('supervisor.tx_source_file', payload.data.path);
+      setNotice('File uploaded: ' + file.name);
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
   function update(path, rawValue) {
     const value = typeof rawValue === 'string' && /^-?\d+$/.test(rawValue) ? Number(rawValue) : rawValue;
     setConfig((prev) => {
@@ -314,7 +338,7 @@ function App() {
             help="Transaction injection rate in transactions per second (tx/s). The supervisor injects transactions at this constant rate into the blockchain network."
           />
           <NumberField
-            label="Epoch (s)"
+            label="Reconfiguration Interval (s)"
             value={config.supervisor.epoch_duration}
             onChange={(v) => update('supervisor.epoch_duration', v)}
             help="Duration of one epoch in seconds. At the end of each epoch, performance metrics are recorded and CLPA may migrate accounts between shards to rebalance load."
@@ -324,6 +348,7 @@ function App() {
               Transaction Source
               <HelpIcon text="Source of injected transactions:\n\n• Random Source — Supervisor generates random transactions automatically.\n• CSV Source — Supervisor reads transactions from a specified CSV file." />
             </span>
+
             <select value={config.supervisor.tx_source_type} onChange={(e) => update('supervisor.tx_source_type', e.target.value)}>
               <option value="random_source">Random Source</option>
               <option value="csv_source">CSV Source</option>
@@ -334,7 +359,25 @@ function App() {
               CSV Path
               <HelpIcon text="File path to the CSV file containing pre-generated transactions. This field is only used when the transaction source type is set to 'CSV Source'." />
             </span>
-            <input value={config.supervisor.tx_source_file} onChange={(e) => update('supervisor.tx_source_file', e.target.value)} placeholder="./data/txs.csv" />
+            <div className="csv-path-row">
+              <input value={config.supervisor.tx_source_file} onChange={(e) => update('supervisor.tx_source_file', e.target.value)} placeholder="./data/txs.csv" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="csv-file-input"
+                onChange={handleFileUpload}
+              />
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy}
+                title="Upload CSV from local machine"
+              >
+                <Upload size={16} />
+              </button>
+            </div>
           </label>
           <label className="check-field">
             <input
@@ -389,10 +432,10 @@ function App() {
         {notice && <div className="notice">{notice}</div>}
 
         <section className="charts">
+          <p className="chart-disclaimer">Charts shown here are for reference only. Please generate your own charts for specific experiment analysis.</p>
           <ChartCard
             title="TPS"
             subtitle="Transactions Per Second"
-            icon={<BarChart3 size={18} />}
             src={`${CHART_API_BASE}/api/charts/tps?type=line&v=${tick}`}
             fallbackSrc={`${CHART_API_BASE}/api/charts/tps?type=bar&v=${tick}`}
             hasData={(results.rows || []).length > 0}
@@ -400,7 +443,6 @@ function App() {
           <ChartCard
             title="CTX Ratio"
             subtitle="Cross-Shard Transaction Ratio"
-            icon={<BarChart3 size={18} />}
             src={`${CHART_API_BASE}/api/charts/ctx_ratio?type=line&v=${tick}`}
             fallbackSrc={`${CHART_API_BASE}/api/charts/ctx_ratio?type=bar&v=${tick}`}
             hasData={(results.rows || []).length > 0}
@@ -408,7 +450,6 @@ function App() {
           <ChartCard
             title="TCL"
             subtitle="Transaction Confirmation Latency"
-            icon={<BarChart3 size={18} />}
             src={`${CHART_API_BASE}/api/charts/tcl?type=line&v=${tick}`}
             fallbackSrc={`${CHART_API_BASE}/api/charts/tcl?type=bar&v=${tick}`}
             hasData={(results.rows || []).length > 0}
@@ -619,7 +660,7 @@ function StatusCard({ label, value, tone, wide }) {
   );
 }
 
-function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
+function ChartCard({ title, subtitle, src, fallbackSrc, hasData }) {
   const [chartType, setChartType] = useState('line');
   const [retryCount, setRetryCount] = useState(0);
 
@@ -646,7 +687,7 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
       <article className="metric chart-card">
         <div className="metric-head">
           <div className="metric-head-left">
-            <span>{icon}{title}</span>
+            <span>{title}</span>
             <small>{subtitle}</small>
           </div>
         </div>
@@ -661,7 +702,7 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
     <article className="metric chart-card">
       <div className="metric-head">
         <div className="metric-head-left">
-          <span>{icon}{title}</span>
+          <span>{title}</span>
           <small>{subtitle}</small>
         </div>
         <div className="chart-toggle">
