@@ -260,9 +260,6 @@ func (s *Service) resetExperimentDir() error {
 	if err := os.RemoveAll(s.experimentDir()); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.logDir, 0755); err != nil {
-		return err
-	}
 	return os.WriteFile(s.logPath, []byte(""), 0644)
 }
 
@@ -288,32 +285,16 @@ func (s *Service) startProcesses(cfg WebConfig) error {
 	ipTablePath := s.ipTablePath()
 	for sid := int64(0); sid < cfg.System.ShardNum; sid++ {
 		for nid := int64(0); nid < cfg.System.NodeNum; nid++ {
-			perLogPath := filepath.Join(s.logDir, fmt.Sprintf("./shard=%d_node=%d/info.log", sid, nid))
-			perLogFile, perr := os.OpenFile(perLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-			if perr != nil {
-				_ = logFile.Close()
-				return perr
-			}
-			multiWriter := io.MultiWriter(logFile, perLogFile)
-
 			cmd := exec.Command("go", "run", "cmd/consensusnode/main.go", "-config", configPath, "-ip_table", ipTablePath, "-shard_id", fmt.Sprintf("%d", sid), "-node_id", fmt.Sprintf("%d", nid))
-			if err := s.startCommand(cmd, multiWriter, perLogFile); err != nil {
+			if err := s.startCommand(cmd, logFile); err != nil {
 				_ = logFile.Close()
 				return err
 			}
 		}
 	}
 
-	supervisorLogPath := filepath.Join(s.logDir, "supervisor.log")
-	supervisorLogFile, serr := os.OpenFile(supervisorLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if serr != nil {
-		_ = logFile.Close()
-		return serr
-	}
-	supervisorWriter := io.MultiWriter(logFile, supervisorLogFile)
-
 	cmd := exec.Command("go", "run", "cmd/supervisor/main.go", "-config", configPath, "-ip_table", ipTablePath, "-shard_id=0x7fffffff", "-node_id=0")
-	if err := s.startCommand(cmd, supervisorWriter, supervisorLogFile); err != nil {
+	if err := s.startCommand(cmd, logFile); err != nil {
 		_ = logFile.Close()
 		return err
 	}
@@ -322,13 +303,12 @@ func (s *Service) startProcesses(cfg WebConfig) error {
 	return nil
 }
 
-func (s *Service) startCommand(cmd *exec.Cmd, output io.Writer, perLogFile io.Closer) error {
+func (s *Service) startCommand(cmd *exec.Cmd, output io.Writer) error {
 	cmd.Dir = s.emulatorRoot
 	cmd.Stdout = output
 	cmd.Stderr = output
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
-		_ = perLogFile.Close()
 		return err
 	}
 
