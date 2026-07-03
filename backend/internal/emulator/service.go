@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,10 +19,12 @@ type Service struct {
 	emulatorRoot string
 	workdir      string
 	logPath      string
+	logDir       string
 
-	mu       sync.Mutex
-	status   ExperimentStatus
-	commands []*exec.Cmd
+	mu         sync.Mutex
+	status     ExperimentStatus
+	commands   []*exec.Cmd
+	lastConfig WebConfig
 }
 
 func NewService(emulatorRoot, workdir string) (*Service, error) {
@@ -35,6 +38,7 @@ func NewService(emulatorRoot, workdir string) (*Service, error) {
 		emulatorRoot: emulatorRoot,
 		workdir:      workdir,
 		logPath:      filepath.Join(workdir, "experiment.log"),
+		logDir:       filepath.Join(workdir, "exp", "logs"),
 		status: ExperimentStatus{
 			Status:    "idle",
 			Message:   "ready",
@@ -77,6 +81,7 @@ func (s *Service) StartExperiment(cfg WebConfig) (ExperimentStatus, error) {
 		UpdatedAt: time.Now(),
 	}
 	s.commands = nil
+	s.lastConfig = cfg
 	s.mu.Unlock()
 
 	if err := s.resetExperimentDir(); err != nil {
@@ -131,8 +136,19 @@ func (s *Service) Status() ExperimentStatus {
 	return status
 }
 
-func (s *Service) Logs() map[string]string {
-	data, err := os.ReadFile(s.logPath)
+func (s *Service) Logs(source string) map[string]string {
+	var path string
+	switch {
+	case source == "" || source == "all":
+		path = s.logPath
+	case source == "supervisor":
+		path = filepath.Join(s.logDir, "shard=2147483647_node=0", "info.log")
+	default:
+		// expected format: "s{shardId}_n{nodeId}"
+		path = filepath.Join(s.logDir, source, "info.log")
+	}
+
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return map[string]string{"text": ""}
 	}
@@ -141,6 +157,54 @@ func (s *Service) Logs() map[string]string {
 		text = text[len(text)-50000:]
 	}
 	return map[string]string{"text": text}
+}
+
+func (s *Service) LogSources() []string {
+	// 1. Scan log directory for actual per-node log files
+	entries, err := os.ReadDir(s.logDir)
+	if err == nil {
+		sources := []string{"all"}
+		hasSupervisor := false
+		hasNodes := false
+		for _, entry := range entries {
+			name := entry.Name()
+			re := regexp.MustCompile(`^shard=(\d+)_node=(\d+)$`)
+			if name == "shard=2147483647_node=0" {
+				hasSupervisor = true
+				continue
+			}
+			if re.MatchString(name) {
+				sources = append(sources, name)
+				hasNodes = true
+			}
+		}
+		if hasSupervisor || hasNodes {
+			if hasSupervisor {
+				sources = append([]string{"all", "supervisor"}, sources[1:]...)
+			}
+			return sources
+		}
+	}
+
+	// 2. Fallback: compute from config
+	s.mu.Lock()
+	cfg := s.lastConfig
+	s.mu.Unlock()
+
+	if cfg.System.ShardNum == 0 {
+		cfg = s.LoadConfig()
+	}
+
+	sources := []string{"all"}
+	if cfg.System.ShardNum > 0 {
+		sources = append(sources, "supervisor")
+		for sid := int64(0); sid < cfg.System.ShardNum; sid++ {
+			for nid := int64(0); nid < cfg.System.NodeNum; nid++ {
+				sources = append(sources, fmt.Sprintf("shard=%d_node=%d", sid, nid))
+			}
+		}
+	}
+	return sources
 }
 
 func (s *Service) Results() (Results, error) {
@@ -196,7 +260,7 @@ func (s *Service) resetExperimentDir() error {
 	if err := os.RemoveAll(s.experimentDir()); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.experimentDir(), 0755); err != nil {
+	if err := os.MkdirAll(s.logDir, 0755); err != nil {
 		return err
 	}
 	return os.WriteFile(s.logPath, []byte(""), 0644)
@@ -224,16 +288,32 @@ func (s *Service) startProcesses(cfg WebConfig) error {
 	ipTablePath := s.ipTablePath()
 	for sid := int64(0); sid < cfg.System.ShardNum; sid++ {
 		for nid := int64(0); nid < cfg.System.NodeNum; nid++ {
+			perLogPath := filepath.Join(s.logDir, fmt.Sprintf("./shard=%d_node=%d/info.log", sid, nid))
+			perLogFile, perr := os.OpenFile(perLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			if perr != nil {
+				_ = logFile.Close()
+				return perr
+			}
+			multiWriter := io.MultiWriter(logFile, perLogFile)
+
 			cmd := exec.Command("go", "run", "cmd/consensusnode/main.go", "-config", configPath, "-ip_table", ipTablePath, "-shard_id", fmt.Sprintf("%d", sid), "-node_id", fmt.Sprintf("%d", nid))
-			if err := s.startCommand(cmd, logFile); err != nil {
+			if err := s.startCommand(cmd, multiWriter, perLogFile); err != nil {
 				_ = logFile.Close()
 				return err
 			}
 		}
 	}
 
+	supervisorLogPath := filepath.Join(s.logDir, "supervisor.log")
+	supervisorLogFile, serr := os.OpenFile(supervisorLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if serr != nil {
+		_ = logFile.Close()
+		return serr
+	}
+	supervisorWriter := io.MultiWriter(logFile, supervisorLogFile)
+
 	cmd := exec.Command("go", "run", "cmd/supervisor/main.go", "-config", configPath, "-ip_table", ipTablePath, "-shard_id=0x7fffffff", "-node_id=0")
-	if err := s.startCommand(cmd, logFile); err != nil {
+	if err := s.startCommand(cmd, supervisorWriter, supervisorLogFile); err != nil {
 		_ = logFile.Close()
 		return err
 	}
@@ -242,12 +322,13 @@ func (s *Service) startProcesses(cfg WebConfig) error {
 	return nil
 }
 
-func (s *Service) startCommand(cmd *exec.Cmd, output io.Writer) error {
+func (s *Service) startCommand(cmd *exec.Cmd, output io.Writer, perLogFile io.Closer) error {
 	cmd.Dir = s.emulatorRoot
 	cmd.Stdout = output
 	cmd.Stderr = output
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
+		_ = perLogFile.Close()
 		return err
 	}
 

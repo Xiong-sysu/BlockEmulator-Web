@@ -54,16 +54,22 @@ function App() {
   const [status, setStatus] = useState({ status: 'idle', pids: [], message: 'ready' });
   const [results, setResults] = useState({ columns: [], rows: [], files: [] });
   const [logs, setLogs] = useState('');
+  const [logSource, setLogSource] = useState('all');
+  const logSourceRef = useRef(logSource);
+  const [logSources, setLogSources] = useState(['all']);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
   const fileInputRef = useRef(null);
   const configFileInputRef = useRef(null);
 
+  useEffect(() => { logSourceRef.current = logSource; }, [logSource]);
+
   useEffect(() => {
     refreshAll();
     const timer = setInterval(() => {
       refreshRuntime();
+      refreshLogSources().catch(() => {});
       setTick((t) => t + 1);
     }, 3000);
     return () => clearInterval(timer);
@@ -90,6 +96,7 @@ function App() {
       const cfg = await api('/api/config');
       setConfig(cfg);
       await refreshRuntime();
+      await refreshLogSources();
       setNotice('Configuration loaded from BlockEmulator-X');
     } catch (err) {
       setNotice(err.message);
@@ -98,12 +105,27 @@ function App() {
     }
   }
 
+  async function refreshLogSources() {
+    try {
+      const sources = await api('/api/experiments/logs/sources');
+      if (sources && sources.length > 0) {
+        setLogSources(sources);
+        // Reset to 'all' if current source no longer exists
+        if (!sources.includes(logSourceRef.current)) {
+          setLogSource('all');
+        }
+      }
+    } catch (_) {
+      // silently ignore — sources endpoint may not be available yet
+    }
+  }
+
   async function refreshRuntime() {
     try {
       const [nextStatus, nextResults, logData] = await Promise.all([
         api('/api/experiments/status'),
         api('/api/results'),
-        api('/api/experiments/logs'),
+        api(`/api/experiments/logs?source=${encodeURIComponent(logSourceRef.current)}`),
       ]);
       setStatus(nextStatus);
       setResults(nextResults || { columns: [], rows: [], files: [] });
@@ -455,7 +477,20 @@ function App() {
               <p className="eyebrow">Runtime</p>
               <h3>Logs</h3>
             </div>
-            <Terminal size={18} />
+            <div className="log-controls">
+              <select
+                className="log-source-select"
+                value={logSource}
+                onChange={(e) => setLogSource(e.target.value)}
+              >
+                {logSources.map((src) => (
+                  <option key={src} value={src}>
+                    {src === 'all' ? 'All Nodes' : src === 'supervisor' ? 'Supervisor' : src.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+              <Terminal size={18} />
+            </div>
           </div>
           <pre>{logs || 'No logs yet.'}</pre>
         </section>

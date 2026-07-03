@@ -150,6 +150,29 @@ func main() {
 		}
 	}))
 
+	mux.HandleFunc("/api/upload/tx-source", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		if err := r.ParseMultipartForm(50 << 20); err != nil {
+			writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Error: "failed to parse upload: " + err.Error()})
+			return
+		}
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Error: "missing file: " + err.Error()})
+			return
+		}
+		defer file.Close()
+		destPath, err := service.SaveUploadedFile(file, header.Filename)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: map[string]string{"path": destPath}})
+	}))
+
 	mux.HandleFunc("/api/experiments/start", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w)
@@ -189,12 +212,21 @@ func main() {
 		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: service.Status()})
 	}))
 
+	mux.HandleFunc("/api/experiments/logs/sources", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: service.LogSources()})
+	}))
+
 	mux.HandleFunc("/api/experiments/logs", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w)
 			return
 		}
-		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: service.Logs()})
+		source := r.URL.Query().Get("source")
+		writeJSON(w, http.StatusOK, apiResponse{OK: true, Data: service.Logs(source)})
 	}))
 
 	mux.HandleFunc("/api/results", withCORS(func(w http.ResponseWriter, r *http.Request) {

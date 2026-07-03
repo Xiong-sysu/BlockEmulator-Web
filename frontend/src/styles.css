@@ -434,6 +434,32 @@ td {
   white-space: pre-wrap;
 }
 
+/* ————— Log source selector ————— */
+
+.log-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.log-source-select {
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #22303c;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.log-source-select:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.1);
+}
+
 /* ————— Help icon + tooltip ————— */
 
 .help-icon-wrap {
