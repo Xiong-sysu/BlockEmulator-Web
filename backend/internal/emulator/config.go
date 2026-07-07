@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -291,6 +292,31 @@ func (s *Service) LoadSavedConfig(id string) (WebConfig, error) {
 		return WebConfig{}, err
 	}
 	return sf.Config, nil
+}
+
+func (s *Service) UploadDir() string {
+	return filepath.Join(s.workdir, "uploads")
+}
+
+func (s *Service) SaveUploadedFile(src io.Reader, filename string) (string, error) {
+	dir := s.UploadDir()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	safe := filepath.Base(filename)
+	if safe == "." || safe == ".." || safe == "" {
+		safe = "uploaded.csv"
+	}
+	destPath := filepath.Join(dir, safe)
+	f, err := os.Create(destPath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, src); err != nil {
+		return "", err
+	}
+	return destPath, nil
 }
 
 func (s *Service) DeleteSavedConfig(id string) error {

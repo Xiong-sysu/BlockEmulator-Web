@@ -59,6 +59,7 @@ function App() {
   const [logSources, setLogSources] = useState(['all']);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [rawInputs, setRawInputs] = useState({});
   const [tick, setTick] = useState(0);
   const fileInputRef = useRef(null);
   const configFileInputRef = useRef(null);
@@ -95,6 +96,7 @@ function App() {
     try {
       const cfg = await api('/api/config');
       setConfig(cfg);
+      setRawInputs({});
       await refreshRuntime();
       await refreshLogSources();
       setNotice('Configuration loaded from BlockEmulator-X');
@@ -222,6 +224,7 @@ function App() {
           network: { ...defaultConfig.network, ...(cfg.network || {}) },
         };
         setConfig(merged);
+        setRawInputs({});
         setNotice('Configuration loaded from ' + file.name);
       } catch (err) {
         setNotice('Failed to parse config file: ' + err.message);
@@ -256,7 +259,10 @@ function App() {
   }
 
   function update(path, rawValue) {
-    const value = typeof rawValue === 'string' && /^-?\d+$/.test(rawValue) ? Number(rawValue) : rawValue;
+    // Keep raw input for display
+    setRawInputs((prev) => ({ ...prev, [path]: rawValue }));
+    // Parse sci notation for config value
+    const value = typeof rawValue === 'string' && /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(rawValue) ? Number(rawValue) : rawValue;
     setConfig((prev) => {
       const next = structuredClone(prev);
       const keys = path.split('.');
@@ -284,18 +290,24 @@ function App() {
             label="Shard Count"
             value={config.system.shard_num}
             onChange={(v) => update('system.shard_num', v)}
+            path="system.shard_num"
+            rawInputs={rawInputs}
             help="The number of shards in the blockchain system. Each shard operates as an independent sub-blockchain with its own set of nodes. Must be a positive integer."
           />
           <NumberField
             label="Nodes per Shard"
             value={config.system.node_num}
             onChange={(v) => update('system.node_num', v)}
+            path="system.node_num"
+            rawInputs={rawInputs}
             help="The number of consensus nodes per shard. More nodes improve decentralization and fault tolerance but may reduce overall throughput. Must be a positive integer."
           />
           <NumberField
             label="Block Tx Limit"
             value={config.system.limit}
             onChange={(v) => update('system.limit', v)}
+            path="system.limit"
+            rawInputs={rawInputs}
             help="Maximum number of transactions per block. This limits the block size to control propagation time and resource usage across the network."
           />
           <label className="field">
@@ -317,6 +329,8 @@ function App() {
             label="Block Interval (ms)"
             value={config.consensus_node.block_interval}
             onChange={(v) => update('consensus_node.block_interval', v)}
+            path="consensus_node.block_interval"
+            rawInputs={rawInputs}
             help="Time interval between two consecutive blocks, in milliseconds. Lower values increase transaction throughput but may lead to more forks and higher computational overhead."
           />
         </section>
@@ -327,18 +341,24 @@ function App() {
             label="Total Transactions"
             value={config.supervisor.tx_number}
             onChange={(v) => update('supervisor.tx_number', v)}
+            path="supervisor.tx_number"
+            rawInputs={rawInputs}
             help="Total number of transactions the supervisor will inject into the system during the experiment run."
           />
           <NumberField
             label="Injection Speed (tx/s)"
             value={config.supervisor.tx_injection_speed}
             onChange={(v) => update('supervisor.tx_injection_speed', v)}
+            path="supervisor.tx_injection_speed"
+            rawInputs={rawInputs}
             help="Transaction injection rate in transactions per second (tx/s). The supervisor injects transactions at this constant rate into the blockchain network."
           />
           <NumberField
             label="Reconfiguration Interval (s)"
             value={config.supervisor.epoch_duration}
             onChange={(v) => update('supervisor.epoch_duration', v)}
+            path="supervisor.epoch_duration"
+            rawInputs={rawInputs}
             help="Duration of one epoch in seconds. At the end of each epoch, performance metrics are recorded and CLPA may migrate accounts between shards to rebalance load."
           />
           <label className="field">
@@ -394,12 +414,16 @@ function App() {
             label="Bandwidth"
             value={config.network.bandwidth}
             onChange={(v) => update('network.bandwidth', v)}
+            path="network.bandwidth"
+            rawInputs={rawInputs}
             help="Network bandwidth limit for inter-node communication. Controls the maximum data transfer rate between consensus nodes in the blockchain network."
           />
           <NumberField
             label="Latency (ms)"
             value={config.network.latency}
             onChange={(v) => update('network.latency', v)}
+            path="network.latency"
+            rawInputs={rawInputs}
             help="Artificial network latency added to all inter-node messages, in milliseconds. Use this to simulate real-world network conditions such as WAN delays."
           />
         </section>
@@ -518,14 +542,15 @@ function HelpIcon({ text, side }) {
   );
 }
 
-function NumberField({ label, value, onChange, help }) {
+function NumberField({ label, value, onChange, help, path, rawInputs }) {
+  const displayValue = rawInputs?.[path] ?? value;
   return (
     <label className="field">
       <span>
         {label}
         {help ? <HelpIcon text={help} /> : null}
       </span>
-      <input type="number" value={value} onChange={(e) => onChange(e.target.value)} />
+      <input type="text" inputMode="decimal" value={displayValue} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
