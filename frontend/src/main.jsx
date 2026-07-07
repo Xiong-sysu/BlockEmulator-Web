@@ -1,15 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
-  BarChart3,
   Download,
   FileText,
+  FolderOpen,
+  HelpCircle,
   Play,
   RefreshCw,
   Save,
   Square,
   Terminal,
+  Upload,
 } from 'lucide-react';
 import './styles.css';
 
@@ -52,14 +54,23 @@ function App() {
   const [status, setStatus] = useState({ status: 'idle', pids: [], message: 'ready' });
   const [results, setResults] = useState({ columns: [], rows: [], files: [] });
   const [logs, setLogs] = useState('');
+  const [logSource, setLogSource] = useState('all');
+  const logSourceRef = useRef(logSource);
+  const [logSources, setLogSources] = useState(['all']);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [rawInputs, setRawInputs] = useState({});
   const [tick, setTick] = useState(0);
+  const fileInputRef = useRef(null);
+  const configFileInputRef = useRef(null);
+
+  useEffect(() => { logSourceRef.current = logSource; }, [logSource]);
 
   useEffect(() => {
     refreshAll();
     const timer = setInterval(() => {
       refreshRuntime();
+      refreshLogSources().catch(() => {});
       setTick((t) => t + 1);
     }, 3000);
     return () => clearInterval(timer);
@@ -85,12 +96,29 @@ function App() {
     try {
       const cfg = await api('/api/config');
       setConfig(cfg);
+      setRawInputs({});
       await refreshRuntime();
-      setNotice('配置已从 BlockEmulator-X 读取');
+      await refreshLogSources();
+      setNotice('Configuration loaded from BlockEmulator-X');
     } catch (err) {
       setNotice(err.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function refreshLogSources() {
+    try {
+      const sources = await api('/api/experiments/logs/sources');
+      if (sources && sources.length > 0) {
+        setLogSources(sources);
+        // Reset to 'all' if current source no longer exists
+        if (!sources.includes(logSourceRef.current)) {
+          setLogSource('all');
+        }
+      }
+    } catch (_) {
+      // silently ignore — sources endpoint may not be available yet
     }
   }
 
@@ -99,7 +127,7 @@ function App() {
       const [nextStatus, nextResults, logData] = await Promise.all([
         api('/api/experiments/status'),
         api('/api/results'),
-        api('/api/experiments/logs'),
+        api(`/api/experiments/logs?source=${encodeURIComponent(logSourceRef.current)}`),
       ]);
       setStatus(nextStatus);
       setResults(nextResults || { columns: [], rows: [], files: [] });
@@ -111,16 +139,16 @@ function App() {
 
   async function validateConfig() {
     const errors = [];
-    if (config.system.shard_num <= 0) errors.push('分片数必须大于 0');
-    if (config.system.node_num <= 0) errors.push('每片节点数必须大于 0');
-    if (config.system.limit <= 0) errors.push('区块大小必须大于 0');
-    if (config.consensus_node.block_interval <= 0) errors.push('区块间隔必须大于 0');
-    if (config.supervisor.tx_number <= 0) errors.push('交易总数必须大于 0');
-    if (config.supervisor.tx_injection_speed <= 0) errors.push('注入速度必须大于 0');
+    if (config.system.shard_num <= 0) errors.push('Shard count must be greater than 0');
+    if (config.system.node_num <= 0) errors.push('Nodes per shard must be greater than 0');
+    if (config.system.limit <= 0) errors.push('Block size must be greater than 0');
+    if (config.consensus_node.block_interval <= 0) errors.push('Block interval must be greater than 0');
+    if (config.supervisor.tx_number <= 0) errors.push('Transaction count must be greater than 0');
+    if (config.supervisor.tx_injection_speed <= 0) errors.push('Injection speed must be greater than 0');
     if (config.supervisor.tx_source_type === 'csv_source' && !config.supervisor.tx_source_file.trim()) {
-      errors.push('CSV 交易源需要填写文件路径');
+      errors.push('CSV file path is required for CSV source');
     }
-    if (errors.length > 0) throw new Error(errors.join('；'));
+    if (errors.length > 0) throw new Error(errors.join('; '));
     await api('/api/config/validate', { method: 'POST', body: JSON.stringify(config) });
   }
 
@@ -130,7 +158,7 @@ function App() {
       await validateConfig();
       await api('/api/config', { method: 'POST', body: JSON.stringify(config) });
       await api('/api/ip-table', { method: 'POST', body: JSON.stringify(config) });
-      setNotice('配置和 ip_table.json 已写入 BlockEmulator-X');
+      setNotice('Configuration and ip_table.json written to BlockEmulator-X');
     } catch (err) {
       setNotice(err.message);
     } finally {
@@ -144,7 +172,7 @@ function App() {
       await validateConfig();
       const nextStatus = await api('/api/experiments/start', { method: 'POST', body: JSON.stringify(config) });
       setStatus(nextStatus);
-      setNotice('实验已启动');
+      setNotice('Experiment started');
       await refreshRuntime();
     } catch (err) {
       setNotice(err.message);
@@ -158,7 +186,7 @@ function App() {
     try {
       const nextStatus = await api('/api/experiments/stop', { method: 'POST' });
       setStatus(nextStatus);
-      setNotice('实验已停止');
+      setNotice('Experiment stopped');
       await refreshRuntime();
     } catch (err) {
       setNotice(err.message);
@@ -167,8 +195,74 @@ function App() {
     }
   }
 
+  function downloadConfig() {
+    const json = JSON.stringify(config, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `blockemulator-config.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setNotice('Configuration downloaded');
+  }
+
+  function handleConfigFileLoad(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const cfg = JSON.parse(event.target.result);
+        // Deep-merge with defaults so missing keys don't crash the UI
+        const merged = {
+          system: { ...defaultConfig.system, ...(cfg.system || {}) },
+          consensus_node: { ...defaultConfig.consensus_node, ...(cfg.consensus_node || {}) },
+          supervisor: { ...defaultConfig.supervisor, ...(cfg.supervisor || {}) },
+          network: { ...defaultConfig.network, ...(cfg.network || {}) },
+        };
+        setConfig(merged);
+        setRawInputs({});
+        setNotice('Configuration loaded from ' + file.name);
+      } catch (err) {
+        setNotice('Failed to parse config file: ' + err.message);
+      } finally {
+        if (configFileInputRef.current) configFileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  async function handleFileUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/api/upload/tx-source`, {
+        method: 'POST',
+        body: formData,
+      });
+      const payload = await res.json();
+      if (!payload.ok) throw new Error(payload.error || 'upload failed');
+      update('supervisor.tx_source_file', payload.data.path);
+      setNotice('File uploaded: ' + file.name);
+    } catch (err) {
+      setNotice(err.message);
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
   function update(path, rawValue) {
-    const value = typeof rawValue === 'string' && /^-?\d+$/.test(rawValue) ? Number(rawValue) : rawValue;
+    // Keep raw input for display
+    setRawInputs((prev) => ({ ...prev, [path]: rawValue }));
+    // Parse sci notation for config value
+    const value = typeof rawValue === 'string' && /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(rawValue) ? Number(rawValue) : rawValue;
     setConfig((prev) => {
       const next = structuredClone(prev);
       const keys = path.split('.');
@@ -192,11 +286,35 @@ function App() {
 
         <section className="form-section">
           <SectionTitle title="System" />
-          <NumberField label="分片数" value={config.system.shard_num} onChange={(v) => update('system.shard_num', v)} />
-          <NumberField label="每片节点数" value={config.system.node_num} onChange={(v) => update('system.node_num', v)} />
-          <NumberField label="区块交易上限" value={config.system.limit} onChange={(v) => update('system.limit', v)} />
+          <NumberField
+            label="Shard Count"
+            value={config.system.shard_num}
+            onChange={(v) => update('system.shard_num', v)}
+            path="system.shard_num"
+            rawInputs={rawInputs}
+            help="The number of shards in the blockchain system. Each shard operates as an independent sub-blockchain with its own set of nodes. Must be a positive integer."
+          />
+          <NumberField
+            label="Nodes per Shard"
+            value={config.system.node_num}
+            onChange={(v) => update('system.node_num', v)}
+            path="system.node_num"
+            rawInputs={rawInputs}
+            help="The number of consensus nodes per shard. More nodes improve decentralization and fault tolerance but may reduce overall throughput. Must be a positive integer."
+          />
+          <NumberField
+            label="Block Tx Limit"
+            value={config.system.limit}
+            onChange={(v) => update('system.limit', v)}
+            path="system.limit"
+            rawInputs={rawInputs}
+            help="Maximum number of transactions per block. This limits the block size to control propagation time and resource usage across the network."
+          />
           <label className="field">
-            <span>共识类型</span>
+            <span>
+              Consensus Type
+              <HelpIcon text={"Cross-shard transaction handling mode:\n\n• Static Relay — Accounts remain in their original shards; cross-shard txs handled by relay nodes.\n• Static Broker — Accounts remain in their original shards; cross-shard txs handled by dedicated broker accounts.\n• CLPA Relay — Accounts are dynamically migrated across shards by CLPA at each epoch; cross-shard txs handled by relay nodes.\n• CLPA Broker — Accounts are dynamically migrated by CLPA; cross-shard txs handled by broker accounts."} />
+            </span>
             <select value={config.system.consensus_type} onChange={(e) => update('system.consensus_type', e.target.value)}>
               {consensusOptions.map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
@@ -207,24 +325,77 @@ function App() {
 
         <section className="form-section">
           <SectionTitle title="Consensus Node" />
-          <NumberField label="区块间隔 ms" value={config.consensus_node.block_interval} onChange={(v) => update('consensus_node.block_interval', v)} />
+          <NumberField
+            label="Block Interval (ms)"
+            value={config.consensus_node.block_interval}
+            onChange={(v) => update('consensus_node.block_interval', v)}
+            path="consensus_node.block_interval"
+            rawInputs={rawInputs}
+            help="Time interval between two consecutive blocks, in milliseconds. Lower values increase transaction throughput but may lead to more forks and higher computational overhead."
+          />
         </section>
 
         <section className="form-section">
           <SectionTitle title="Supervisor" />
-          <NumberField label="交易总数" value={config.supervisor.tx_number} onChange={(v) => update('supervisor.tx_number', v)} />
-          <NumberField label="注入速度 tx/s" value={config.supervisor.tx_injection_speed} onChange={(v) => update('supervisor.tx_injection_speed', v)} />
-          <NumberField label="Epoch 秒" value={config.supervisor.epoch_duration} onChange={(v) => update('supervisor.epoch_duration', v)} />
+          <NumberField
+            label="Total Transactions"
+            value={config.supervisor.tx_number}
+            onChange={(v) => update('supervisor.tx_number', v)}
+            path="supervisor.tx_number"
+            rawInputs={rawInputs}
+            help="Total number of transactions the supervisor will inject into the system during the experiment run."
+          />
+          <NumberField
+            label="Injection Speed (tx/s)"
+            value={config.supervisor.tx_injection_speed}
+            onChange={(v) => update('supervisor.tx_injection_speed', v)}
+            path="supervisor.tx_injection_speed"
+            rawInputs={rawInputs}
+            help="Transaction injection rate in transactions per second (tx/s). The supervisor injects transactions at this constant rate into the blockchain network."
+          />
+          <NumberField
+            label="Reconfiguration Interval (s)"
+            value={config.supervisor.epoch_duration}
+            onChange={(v) => update('supervisor.epoch_duration', v)}
+            path="supervisor.epoch_duration"
+            rawInputs={rawInputs}
+            help="Duration of one epoch in seconds. At the end of each epoch, performance metrics are recorded and CLPA may migrate accounts between shards to rebalance load."
+          />
           <label className="field">
-            <span>交易来源</span>
+            <span>
+              Transaction Source
+              <HelpIcon text="Source of injected transactions:\n\n• Random Source — Supervisor generates random transactions automatically.\n• CSV Source — Supervisor reads transactions from a specified CSV file." />
+            </span>
+
             <select value={config.supervisor.tx_source_type} onChange={(e) => update('supervisor.tx_source_type', e.target.value)}>
               <option value="random_source">Random Source</option>
               <option value="csv_source">CSV Source</option>
             </select>
           </label>
           <label className="field">
-            <span>CSV 路径</span>
-            <input value={config.supervisor.tx_source_file} onChange={(e) => update('supervisor.tx_source_file', e.target.value)} placeholder="./data/txs.csv" />
+            <span>
+              CSV Path
+              <HelpIcon text="File path to the CSV file containing pre-generated transactions. This field is only used when the transaction source type is set to 'CSV Source'." />
+            </span>
+            <div className="csv-path-row">
+              <input value={config.supervisor.tx_source_file} onChange={(e) => update('supervisor.tx_source_file', e.target.value)} placeholder="./data/txs.csv" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="csv-file-input"
+                onChange={handleFileUpload}
+              />
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy}
+                title="Upload CSV from local machine"
+              >
+                <Upload size={16} />
+              </button>
+            </div>
           </label>
           <label className="check-field">
             <input
@@ -233,13 +404,28 @@ function App() {
               onChange={(e) => update('supervisor.exclude_contract_txs', e.target.checked)}
             />
             <span>Exclude contract transactions</span>
+            <HelpIcon side="left" text="When enabled, smart contract-related transactions are filtered out when reading from a CSV source. Useful for benchmarking pure transfer workloads without smart contract overhead." />
           </label>
         </section>
 
         <section className="form-section">
           <SectionTitle title="Network" />
-          <NumberField label="带宽" value={config.network.bandwidth} onChange={(v) => update('network.bandwidth', v)} />
-          <NumberField label="延迟 ms" value={config.network.latency} onChange={(v) => update('network.latency', v)} />
+          <NumberField
+            label="Bandwidth"
+            value={config.network.bandwidth}
+            onChange={(v) => update('network.bandwidth', v)}
+            path="network.bandwidth"
+            rawInputs={rawInputs}
+            help="Network bandwidth limit for inter-node communication. Controls the maximum data transfer rate between consensus nodes in the blockchain network."
+          />
+          <NumberField
+            label="Latency (ms)"
+            value={config.network.latency}
+            onChange={(v) => update('network.latency', v)}
+            path="network.latency"
+            rawInputs={rawInputs}
+            help="Artificial network latency added to all inter-node messages, in milliseconds. Use this to simulate real-world network conditions such as WAN delays."
+          />
         </section>
       </aside>
 
@@ -250,27 +436,29 @@ function App() {
             <h2>{config.system.shard_num} shards x {config.system.node_num} nodes · {modeLabel}</h2>
           </div>
           <div className="actions">
-            <IconButton icon={<RefreshCw size={17} />} label="刷新" onClick={refreshAll} disabled={busy} />
-            <IconButton icon={<Save size={17} />} label="保存配置" onClick={saveConfig} disabled={busy} />
-            <IconButton icon={<Play size={17} />} label="启动" onClick={startExperiment} disabled={busy || status.status === 'running'} primary />
-            <IconButton icon={<Square size={17} />} label="停止" onClick={stopExperiment} disabled={busy || status.status !== 'running'} danger />
+            <IconButton icon={<RefreshCw size={17} />} label="Refresh" onClick={refreshAll} disabled={busy} />
+            <IconButton icon={<Save size={17} />} label="Save Config" onClick={downloadConfig} disabled={busy} />
+            <IconButton icon={<FolderOpen size={17} />} label="Load Config" onClick={() => configFileInputRef.current?.click()} disabled={busy} />
+            <input ref={configFileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleConfigFileLoad} />
+            <IconButton icon={<Play size={17} />} label="Start" onClick={startExperiment} disabled={busy || status.status === 'running'} primary />
+            <IconButton icon={<Square size={17} />} label="Stop" onClick={stopExperiment} disabled={busy || status.status !== 'running'} danger />
           </div>
         </header>
 
         <div className="status-grid">
-          <StatusCard label="状态" value={status.status || 'idle'} tone={status.status} />
-          <StatusCard label="进程数" value={status.pids?.length || 0} />
-          <StatusCard label="结果文件" value={results.files?.length || 0} />
-          <StatusCard label="消息" value={status.message || notice || 'ready'} wide />
+          <StatusCard label="Status" value={status.status || 'idle'} tone={status.status} />
+          <StatusCard label="Processes" value={status.pids?.length || 0} />
+          <StatusCard label="Result Files" value={results.files?.length || 0} />
+          <StatusCard label="Message" value={status.message || notice || 'ready'} wide />
         </div>
 
         {notice && <div className="notice">{notice}</div>}
 
         <section className="charts">
+          <p className="chart-disclaimer">Charts shown here are for reference only. Please generate your own charts for specific experiment analysis.</p>
           <ChartCard
             title="TPS"
             subtitle="Transactions Per Second"
-            icon={<BarChart3 size={18} />}
             src={`${CHART_API_BASE}/api/charts/tps?type=line&v=${tick}`}
             fallbackSrc={`${CHART_API_BASE}/api/charts/tps?type=bar&v=${tick}`}
             hasData={(results.rows || []).length > 0}
@@ -278,7 +466,6 @@ function App() {
           <ChartCard
             title="CTX Ratio"
             subtitle="Cross-Shard Transaction Ratio"
-            icon={<BarChart3 size={18} />}
             src={`${CHART_API_BASE}/api/charts/ctx_ratio?type=line&v=${tick}`}
             fallbackSrc={`${CHART_API_BASE}/api/charts/ctx_ratio?type=bar&v=${tick}`}
             hasData={(results.rows || []).length > 0}
@@ -286,7 +473,6 @@ function App() {
           <ChartCard
             title="TCL"
             subtitle="Transaction Confirmation Latency"
-            icon={<BarChart3 size={18} />}
             src={`${CHART_API_BASE}/api/charts/tcl?type=line&v=${tick}`}
             fallbackSrc={`${CHART_API_BASE}/api/charts/tcl?type=bar&v=${tick}`}
             hasData={(results.rows || []).length > 0}
@@ -297,7 +483,7 @@ function App() {
           <div className="section-head">
             <div>
               <p className="eyebrow">Results</p>
-              <h3>{results.brief_file || '暂无结果'}</h3>
+              <h3>{results.brief_file || 'No results yet'}</h3>
             </div>
             {results.brief_file && (
               <a className="download" href={`${API_BASE}${results.download_url}`}>
@@ -313,13 +499,27 @@ function App() {
           <div className="section-head">
             <div>
               <p className="eyebrow">Runtime</p>
-              <h3>日志</h3>
+              <h3>Logs</h3>
             </div>
-            <Terminal size={18} />
+            <div className="log-controls">
+              <select
+                className="log-source-select"
+                value={logSource}
+                onChange={(e) => setLogSource(e.target.value)}
+              >
+                {logSources.map((src) => (
+                  <option key={src} value={src}>
+                    {src === 'all' ? 'All Nodes' : src === 'supervisor' ? 'Supervisor' : src.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+              <Terminal size={18} />
+            </div>
           </div>
           <pre>{logs || 'No logs yet.'}</pre>
         </section>
       </section>
+
     </main>
   );
 }
@@ -333,11 +533,24 @@ function SectionTitle({ title }) {
   );
 }
 
-function NumberField({ label, value, onChange }) {
+function HelpIcon({ text, side }) {
+  return (
+    <span className="help-icon-wrap">
+      <HelpCircle size={14} className="help-icon" />
+      <span className={`tooltip${side === 'left' ? ' tooltip-left' : ''}`}>{text}</span>
+    </span>
+  );
+}
+
+function NumberField({ label, value, onChange, help, path, rawInputs }) {
+  const displayValue = rawInputs?.[path] ?? value;
   return (
     <label className="field">
-      <span>{label}</span>
-      <input type="number" value={value} onChange={(e) => onChange(e.target.value)} />
+      <span>
+        {label}
+        {help ? <HelpIcon text={help} /> : null}
+      </span>
+      <input type="text" inputMode="decimal" value={displayValue} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
@@ -360,7 +573,7 @@ function StatusCard({ label, value, tone, wide }) {
   );
 }
 
-function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
+function ChartCard({ title, subtitle, src, fallbackSrc, hasData }) {
   const [chartType, setChartType] = useState('line');
   const [retryCount, setRetryCount] = useState(0);
 
@@ -387,12 +600,12 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
       <article className="metric chart-card">
         <div className="metric-head">
           <div className="metric-head-left">
-            <span>{icon}{title}</span>
+            <span>{title}</span>
             <small>{subtitle}</small>
           </div>
         </div>
         <div className="chart-img-wrap">
-          <div className="empty-chart">等待实验数据...</div>
+          <div className="empty-chart">Waiting for experiment data...</div>
         </div>
       </article>
     );
@@ -402,21 +615,21 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
     <article className="metric chart-card">
       <div className="metric-head">
         <div className="metric-head-left">
-          <span>{icon}{title}</span>
+          <span>{title}</span>
           <small>{subtitle}</small>
         </div>
         <div className="chart-toggle">
           <button
             className={`toggle-btn ${chartType === 'line' ? 'active' : ''}`}
             onClick={() => switchTo('line')}
-            title="折线图"
+            title="Line Chart"
           >
             📈
           </button>
           <button
             className={`toggle-btn ${chartType === 'bar' ? 'active' : ''}`}
             onClick={() => switchTo('bar')}
-            title="柱状图"
+            title="Bar Chart"
           >
             📊
           </button>
@@ -436,7 +649,7 @@ function ChartCard({ title, subtitle, icon, src, fallbackSrc, hasData }) {
 
 function ResultsTable({ columns, rows }) {
   if (!columns.length || !rows.length) {
-    return <div className="empty">实验结束后，这里会展示 brief CSV 的 epoch 指标。</div>;
+    return <div className="empty">After the experiment completes, epoch metrics from the brief CSV will be displayed here.</div>;
   }
   return (
     <div className="table-wrap">

@@ -2,6 +2,21 @@ package emulator
 
 import "time"
 
+// SavedConfigMeta is the list-item payload returned by the list endpoint.
+// It omits the full config to keep the list response small.
+type SavedConfigMeta struct {
+	ID          string `json:"id"`          // filename
+	Description string `json:"description"` // user-provided name
+	SavedAt     string `json:"saved_at"`    // ISO 8601 timestamp
+}
+
+// savedConfigFile is the on-disk format for a single saved configuration.
+type savedConfigFile struct {
+	Description string    `json:"description"`
+	SavedAt     string    `json:"saved_at"`
+	Config      WebConfig `json:"config"`
+}
+
 type WebConfig struct {
 	System        SystemConfig        `json:"system"`
 	ConsensusNode ConsensusNodeConfig `json:"consensus_node"`
