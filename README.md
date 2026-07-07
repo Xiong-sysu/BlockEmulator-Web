@@ -33,7 +33,25 @@ npm run dev
 
 打开 `http://localhost:5173`。
 
-## 已实现 API
+### Python 统计图表后端（python-stats-charts 分支）
+
+```sh
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+Python 后端默认监听 `http://localhost:5001`（macOS 上 5000 常被 AirPlay 占用），读取 Go 后端 `workdir/exp/results/` 中的 CSV 结果，用 matplotlib 生成折线图和柱状图。
+
+**图表 API：**
+- `GET /api/charts/tps?type=line|bar` — TPS 图表 (PNG)
+- `GET /api/charts/ctx_ratio?type=line|bar` — CTX Ratio 图表 (PNG)
+- `GET /api/charts/tcl?type=line|bar` — TCL 图表 (PNG)
+- `GET /api/charts/combined` — 三合一组合图 (PNG)
+- `GET /` — 独立 HTML 预览页面
+
+## 已实现 API（Go 后端）
 
 - `GET /api/config`
 - `POST /api/config/validate`
