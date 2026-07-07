@@ -105,7 +105,7 @@ METRICS = {
         "ylabel": "CTX Ratio",
     },
     "tcl": {
-        "column": "Avg. TCL of this epoch (nanosecond)",
+        "column": "Avg. TCL of this epoch (second)",
         "title": "TCL (Transaction Confirmation Latency)",
         "ylabel": "TCL (ns)",
     },
