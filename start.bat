@@ -13,7 +13,7 @@ setlocal enabledelayedexpansion
 ::    start.bat -h           Show help
 ::
 ::  Services:
-::    Go backend      → http://localhost:8080
+::    Go backend      → http://localhost:9091
 ::    React frontend  → http://localhost:5173
 ::    Python charts   → http://localhost:5001
 :: ============================================================
@@ -49,7 +49,7 @@ if errorlevel 1 (
 )
 cd /d "%BACKEND_DIR%"
 start "BlockEmulator-Go-Backend" cmd /c "go run . 2>&1"
-echo           → http://localhost:8080
+echo           → http://localhost:9091
 :skip_backend
 
 :: —— Start React frontend ——
@@ -92,7 +92,7 @@ echo Usage: %~nx0 [backend^|frontend^|charts^|all]
 echo.
 echo Start one or all BlockEmulator-Web services.
 echo.
-echo   backend   Go API server        → http://localhost:8080
+echo   backend   Go API server        → http://localhost:9091
 echo   frontend  React dev server     → http://localhost:5173
 echo   charts    Python chart server  → http://localhost:5001
 echo   all       Start all three (default)

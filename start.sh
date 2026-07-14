@@ -10,7 +10,7 @@
 #   ./start.sh -h           # Show help
 #
 # Services:
-#   Go backend      → http://localhost:8080
+#   Go backend      → http://localhost:9091
 #   React frontend  → http://localhost:5173
 #   Python charts   → http://localhost:5001
 
@@ -74,7 +74,7 @@ start_backend() {
     go run . &
     local pid=$!
     PIDS+=("$pid")
-    echo -e "       PID: $pid  →  ${CYAN}http://localhost:8080${NC}"
+    echo -e "       PID: $pid  →  ${CYAN}http://localhost:9091${NC}"
     cd "$SCRIPT_DIR"
 }
 
@@ -141,7 +141,7 @@ case "${1:-all}" in
         echo ""
         echo "Start one or all BlockEmulator-Web services."
         echo ""
-        echo "  backend   Go API server        → http://localhost:8080"
+        echo "  backend   Go API server        → http://localhost:9091"
         echo "  frontend  React dev server     → http://localhost:5173"
         echo "  charts    Python chart server  → http://localhost:5001"
         echo "  all       Start all three (default)"
