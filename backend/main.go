@@ -256,7 +256,7 @@ func main() {
 		http.ServeFile(w, r, path)
 	}))
 
-	addr := ":8080"
+	addr := ":9091"
 	if envAddr := os.Getenv("BLOCK_EMULATOR_WEB_ADDR"); envAddr != "" {
 		addr = envAddr
 	}

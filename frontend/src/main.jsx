@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080';
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:9091';
 const CHART_API_BASE = import.meta.env.VITE_CHART_API_BASE ?? 'http://localhost:5001';
 
 const defaultConfig = {
@@ -285,7 +285,7 @@ function App() {
         </div>
 
         <section className="form-section">
-          <SectionTitle title="System" />
+          <SectionTitle title="Chain" />
           <NumberField
             label="Shard Count"
             value={config.system.shard_num}
