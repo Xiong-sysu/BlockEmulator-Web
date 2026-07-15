@@ -285,6 +285,19 @@ function App() {
         </div>
 
         <section className="form-section">
+          <SectionTitle title="Config File" />
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button type="button" className="icon-button" onClick={downloadConfig} disabled={busy}>
+              <Save size={16} /> <span>Save Config</span>
+            </button>
+            <button type="button" className="icon-button" onClick={() => configFileInputRef.current?.click()} disabled={busy}>
+              <FolderOpen size={16} /> <span>Load Config</span>
+            </button>
+            <input ref={configFileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleConfigFileLoad} />
+          </div>
+        </section>
+
+        <section className="form-section">
           <SectionTitle title="Chain" />
           <NumberField
             label="Shard Count"
@@ -437,9 +450,6 @@ function App() {
           </div>
           <div className="actions">
             <IconButton icon={<RefreshCw size={17} />} label="Refresh" onClick={refreshAll} disabled={busy} />
-            <IconButton icon={<Save size={17} />} label="Save Config" onClick={downloadConfig} disabled={busy} />
-            <IconButton icon={<FolderOpen size={17} />} label="Load Config" onClick={() => configFileInputRef.current?.click()} disabled={busy} />
-            <input ref={configFileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleConfigFileLoad} />
             <IconButton icon={<Play size={17} />} label="Start" onClick={startExperiment} disabled={busy || status.status === 'running'} primary />
             <IconButton icon={<Square size={17} />} label="Stop" onClick={stopExperiment} disabled={busy || status.status !== 'running'} danger />
           </div>
